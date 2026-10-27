@@ -28,7 +28,11 @@ def build_driver(settings: Settings):
         return MockDriver()
     if settings.driver == "http":
         return DirectHTTPDriver()
-    return BrowserCDPDriver(headless=settings.headless)
+    return BrowserCDPDriver(
+        headless=settings.headless,
+        debug_dir=settings.browser_debug_dir,
+        debug_keep_page=settings.browser_debug_keep_page,
+    )
 
 
 def create_app(settings: Settings | None = None, pool: AccountPool | None = None, driver=None, gateway: Gateway | None = None) -> FastAPI:

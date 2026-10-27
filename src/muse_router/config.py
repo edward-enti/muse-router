@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     request_timeout_sec: float = 120.0
     first_chunk_timeout_sec: float = 25.0
     headless: bool = True
+    browser_debug_dir: Path = Path("debug/browser")
+    browser_debug_keep_page: bool = False
     keepalive_interval_sec: int = 900
 
     @property

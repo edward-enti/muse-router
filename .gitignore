@@ -5,4 +5,5 @@ __pycache__/
 data/accounts.json
 data/accounts.json.tmp
 .env
+debug/
 src/muse_router.egg-info/

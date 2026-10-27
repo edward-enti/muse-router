@@ -1,8 +1,13 @@
 import asyncio
+import logging
+import time
+from pathlib import Path
 
 from ..core.pool import MuseAccount
 from ..errors import AccountAuthExpiredError, UpstreamTransientError
 from .base import DriverStreamChunk, MuseDriver
+
+logger = logging.getLogger(__name__)
 
 _LOGIN_MARKERS = ("/login", "/auth", "facebook.com", "meta.com/auth")
 
@@ -17,11 +22,65 @@ class BrowserCDPDriver(MuseDriver):
     message as the safe fallback, then cookie refresh after completion.
     """
 
-    def __init__(self, headless: bool = True) -> None:
+    def __init__(
+        self,
+        headless: bool = True,
+        debug_dir: Path | str | None = None,
+        debug_keep_page: bool = False,
+    ) -> None:
         self.headless = headless
+        self.debug_dir = Path(debug_dir) if debug_dir is not None else Path("debug/browser")
+        self.debug_keep_page = debug_keep_page
         self._playwright = None
         self._browser = None
         self._contexts: dict[str, object] = {}
+        self._keep_open_pages: list = []
+
+    async def _dump_debug(self, page, reason: str) -> None:
+        """Save a screenshot + page HTML before the page is closed.
+
+        This runs only when the composer cannot be found, so a failed
+        live run leaves evidence instead of a closed window and a
+        bare error string. The dump contains page markup only; it
+        never includes account cookies.
+        """
+        try:
+            self.debug_dir.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            png_path = self.debug_dir / f"muse-ai-{reason}-{stamp}.png"
+            html_path = self.debug_dir / f"muse-ai-{reason}-{stamp}.html"
+            try:
+                await page.screenshot(path=str(png_path), full_page=True)
+            except Exception as exc:
+                logger.warning("Browser debug screenshot failed: %s", exc)
+            try:
+                html_path.write_text(await page.content(), encoding="utf-8")
+            except Exception as exc:
+                logger.warning("Browser debug HTML dump failed: %s", exc)
+            try:
+                candidates = await page.evaluate(
+                    """() => Array.from(document.querySelectorAll(
+                        'textarea, [contenteditable="true"], input[type="text"], [role="textbox"]'))
+                        .slice(0, 20).map(e => ({
+                            tag: e.tagName,
+                            type: e.getAttribute('type'),
+                            placeholder: e.getAttribute('placeholder'),
+                            ariaLabel: e.getAttribute('aria-label'),
+                            visible: e.offsetParent !== null,
+                        }))"""
+                )
+            except Exception:
+                candidates = []
+            logger.warning(
+                "Browser debug: url=%s title=%s candidates=%s png=%s html=%s",
+                page.url,
+                await page.title() if hasattr(page, "title") else "",
+                candidates,
+                png_path,
+                html_path,
+            )
+        except Exception as exc:
+            logger.warning("Browser debug dump failed: %s", exc)
 
     async def initialize(self) -> None:
         try:
@@ -75,6 +134,7 @@ class BrowserCDPDriver(MuseDriver):
             raise UpstreamTransientError("Playwright is not installed.") from exc
         context = await self._get_context(account)
         page = await context.new_page()
+        keep_page = False
         try:
             await page.goto("https://muse.ai/", wait_until="domcontentloaded", timeout=30000)
             if self._is_login_url(page.url):
@@ -97,6 +157,15 @@ class BrowserCDPDriver(MuseDriver):
                 except Exception:
                     continue
             if composer is None:
+                await self._dump_debug(page, "no-composer")
+                if self.debug_keep_page:
+                    keep_page = True
+                    self._keep_open_pages.append(page)
+                    logger.warning(
+                        "Browser debug: keeping page open for inspection at %s "
+                        "(close the browser window or restart the server to release it).",
+                        page.url,
+                    )
                 raise UpstreamTransientError("Could not find the muse.ai message composer.")
             await composer.fill(prompt)
             await page.keyboard.press("Enter")
@@ -136,10 +205,11 @@ class BrowserCDPDriver(MuseDriver):
                     yield DriverStreamChunk(text="", updated_cookies=updated)
             except Exception:
                 pass
-            try:
-                await page.close()
-            except Exception:
-                pass
+            if not keep_page:
+                try:
+                    await page.close()
+                except Exception:
+                    pass
 
     async def verify_account(self, account: MuseAccount) -> bool:
         try:

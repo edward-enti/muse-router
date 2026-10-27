@@ -90,6 +90,27 @@ not available, `utils/tokenizer.py` falls back to a simple whitespace-based
 estimate so the API and tests keep working; counts in that mode are approximate
 and this is noted here explicitly.
 
+## Debugging the live browser driver
+
+When the browser driver cannot find the message composer, it now
+leaves evidence instead of just closing the page:
+
+- a screenshot and the page HTML are saved under
+  `debug/browser/` (configurable via `MUSE_BROWSER_DEBUG_DIR`,
+  gitignored, never committed);
+- the server log prints the page URL, title, and up to 20
+  candidate input elements (`textarea`, `[contenteditable]`,
+  `input[type="text"]`, `[role="textbox"]`) with their
+  placeholder / aria-label and visibility.
+
+If you also set `MUSE_BROWSER_DEBUG_KEEP_PAGE=true` together
+with `MUSE_HEADLESS=false`, the failed page is kept open for
+manual inspection instead of being closed; close the browser
+window or restart the server to release it. Note that a failed
+attempt still puts the account into transient cooldown
+(default 45s): wait it out, or Reset the account in the
+dashboard, before retrying.
+
 ## Drivers — live-verification status (important)
 
 - `MockDriver`: fully exercised by `pytest`.
