@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>muse-router Dashboard</title>
+<style>
+:root{--bg:#0d0f14;--panel:#171a22;--panel2:#1e222e;--line:#2a2f3f;--text:#e8eaf0;--muted:#9aa3b5;--accent:#ff6b4a;--green:#35c26e;--red:#e5484d;--yellow:#e8b33a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh}
+aside{width:230px;flex-shrink:0;background:#11131a;border-right:1px solid var(--line);padding:16px 12px;position:sticky;top:0;height:100vh}
+aside h1{font-size:18px;margin:4px 8px 2px}aside .ver{color:var(--muted);font-size:12px;margin:0 8px 16px}
+.navbtn{display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--text);padding:9px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+.navbtn:hover{background:var(--panel2)}.navbtn.active{background:#2b1d19;border-color:var(--accent);color:#ffb4a0}
+main{flex:1;padding:22px;min-width:0}h2{margin-top:0}.hint{background:#241d12;border:1px solid #5a4218;border-radius:8px;padding:12px;color:#f0d9a0}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}.card b{font-size:24px;display:block}.card span{color:var(--muted)}
+table{width:100%;border-collapse:collapse;background:var(--panel);border-radius:10px;overflow:hidden}th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-size:12px}
+.badge{padding:2px 8px;border-radius:20px;font-size:12px;background:#333}.badge.ready{background:#123d24;color:#7be0a3}.badge.cooling_down{background:#3d2a12;color:#f0c069}.badge.expired,.badge.disabled{background:#3d1216;color:#ff9aa0}
+button,.btn{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}button.sec{background:var(--panel2);border:1px solid var(--line)}button.danger{background:var(--red)}
+input,textarea,select{width:100%;background:#0f1218;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px;margin:4px 0 10px}
+label{color:var(--muted);font-size:13px}.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}
+pre{white-space:pre-wrap;word-break:break-word;background:#0f1218;border:1px solid var(--line);border-radius:10px;padding:12px;max-height:420px;overflow:auto}
+.ok{color:var(--green)}.err{color:var(--red)}.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+section{display:none}section.active{display:block}
+@media(max-width:760px){body{flex-direction:column}aside{width:100%;height:auto;position:static}}
+</style>
+</head>
+<body>
+<aside>
+<h1>muse-router</h1>
+<p class="ver">OpenAI-compatible gateway &middot; v0.1.0</p>
+<button class="navbtn active" data-sec="overview">Tổng quan</button>
+<button class="navbtn" data-sec="endpoint">Endpoint &amp; Key</button>
+<button class="navbtn" data-sec="accounts">Tài khoản</button>
+<button class="navbtn" data-sec="chat">Thử chat</button>
+<button class="navbtn" data-sec="logs">Nhật ký</button>
+<button class="navbtn" data-sec="settings">Cài đặt</button>
+</aside>
+<main>
+<section id="overview" class="active">
+<h2>Tổng quan</h2>
+<div id="overviewHint"></div>
+<div class="cards" id="cards"></div>
+<h3>Tài khoản</h3>
+<div id="overviewAccounts"></div>
+</section>
+
+<section id="endpoint">
+<h2>Endpoint &amp; Key</h2>
+<p>Server URL của muse-router (để trống = origin hiện tại; khi mở dashboard từ link khác thì nhập URL server bạn đang chạy, ví dụ <span class="mono">http://localhost:18610</span>):</p>
+<label>Server URL</label>
+<input id="serverUrl" type="text" placeholder="để trống = origin hiện tại">
+<p>API endpoint (OpenAI-compatible):</p>
+<p class="mono" id="endpointText"></p>
+<button id="copyEndpoint">Copy endpoint</button>
+<h3>Key</h3>
+<p class="hint">Key chỉ lưu trong localStorage của trình duyệt này và chỉ gửi kèm header <span class="mono">Authorization</span> tới Server URL bạn đã chọn. Dashboard không nhúng key mặc định, không gửi key đi nơi khác.</p>
+<label>Admin key (dùng cho mục Tài khoản, Nhật ký, Cài đặt)</label>
+<input id="adminKey" type="password" placeholder="Nhập admin key">
+<label>API key (dùng cho Thử chat và xem Models)</label>
+<input id="apiKey" type="password" placeholder="Nhập API key">
+<button id="saveKeys">Lưu key</button>
+<button class="sec" id="testConn">Kiểm tra kết nối</button>
+<p id="connStatus"></p>
+</section>
+
+<section id="accounts">
+<h2>Tài khoản</h2>
+<div id="accountsHint"></div>
+<div id="accountsTable"></div>
+<h3>Thêm tài khoản</h3>
+<p class="hint">Backend hỗ trợ gửi trực tiếp chuỗi <span class="mono">cookie_header</span> (copy từ Chrome DevTools, ví dụ <span class="mono">hatch_sess=...; hatch_gw=...</span>). Chỉ cần <span class="mono">hatch_sess</span> là bắt buộc.</p>
+<label>Label</label><input id="newLabel" value="account">
+<label>Cookie header (khuyến nghị)</label><textarea id="newCookieHeader" rows="3" placeholder="hatch_sess=...; hatch_gw=..."></textarea>
+<label>Hoặc Cookies JSON (chỉ dùng khi không nhập cookie header)</label><textarea id="newCookiesJson" rows="3" placeholder='{"hatch_sess": "..."}'></textarea>
+<div class="row"><div><label>Max concurrent</label><input id="newMax" type="number" min="1" placeholder="để trống = mặc định"></div>
+<div><label>Proxy (tùy chọn)</label><input id="newProxy" placeholder="http://..."></div></div>
+<button id="addAccount">Thêm tài khoản</button>
+<p id="addStatus"></p>
+</section>
+
+<section id="chat">
+<h2>Thử chat</h2>
+<div id="chatHint"></div>
+<label>Model</label><select id="modelSel"></select>
+<label>Prompt</label><textarea id="prompt" rows="4" placeholder="Nhập câu hỏi..."></textarea>
+<label><input id="streamChk" type="checkbox" checked style="width:auto"> Stream (SSE)</label><br>
+<button id="sendChat">Gửi</button>
+<h3>Kết quả</h3><pre id="chatOut"></pre><p id="chatUsage"></p>
+</section>
+
+<section id="logs">
+<h2>Nhật ký (Console Log)</h2>
+<div id="logsHint"></div>
+<button id="clearLogs" class="danger">Clear</button>
+<button id="pauseLogs" class="sec">Tạm dừng tự refresh</button>
+<span class="mono" id="logState"></span>
+<div id="logsTable"></div>
+</section>
+
+<section id="settings">
+<h2>Cài đặt</h2>
+<div id="settingsHint"></div>
+<p class="hint">Config đổi qua biến môi trường / file .env rồi restart server. Dashboard không sửa key qua giao diện, và không bao giờ hiển thị key.</p>
+<div id="configTable"></div>
+</section>
+</main>
+<script>
+var adminKey = localStorage.getItem("muse_router_admin_key") || "";
+var apiKey = localStorage.getItem("muse_router_api_key") || "";
+var serverBase = (localStorage.getItem("muse_router_server_url") || "").replace(/\/+$/,"");
+var paused = false, logTimer = null;
+function apiBase(){ return serverBase || window.location.origin }
+function apiUrl(path){ return apiBase() + path }
+function refreshEndpoint(){ $("endpointText").textContent = apiBase() + "/v1" }
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+function hint(el,msg){$(el).innerHTML = msg ? '<div class="hint">'+msg+'</div>' : ''}
+function needAdmin(el){ if(!adminKey){ hint(el,"Chưa nhập admin key. Vào mục Endpoint &amp; Key, nhập admin key rồi quay lại."); return true } hint(el,""); return false }
+function adminFetch(path,opts){ opts = opts || {}; opts.headers = Object.assign({}, opts.headers||{}, {Authorization:"Bearer "+adminKey}); return fetch(apiUrl(path),opts) }
+function apiFetch(path,opts){ opts = opts || {}; opts.headers = Object.assign({}, opts.headers||{}, {Authorization:"Bearer "+apiKey}); return fetch(apiUrl(path),opts) }
+document.querySelectorAll(".navbtn").forEach(function(b){
+  b.onclick = function(){
+    document.querySelectorAll(".navbtn").forEach(function(x){x.classList.remove("active")});
+    b.classList.add("active");
+    document.querySelectorAll("section").forEach(function(s){s.classList.remove("active")});
+    $(b.dataset.sec).classList.add("active");
+    if(b.dataset.sec!=="logs" && logTimer){ clearInterval(logTimer); logTimer = null; }
+    if(b.dataset.sec==="overview") loadOverview();
+    if(b.dataset.sec==="accounts") loadAccounts();
+    if(b.dataset.sec==="logs") startLogs();
+    if(b.dataset.sec==="settings") loadSettings();
+    if(b.dataset.sec==="chat") loadModels();
+  };
+});
+$("serverUrl").value = serverBase; $("serverUrl").placeholder = window.location.origin;
+refreshEndpoint();
+$("adminKey").value = adminKey; $("apiKey").value = apiKey;
+$("copyEndpoint").onclick = function(){ navigator.clipboard.writeText($("endpointText").textContent).then(function(){ $("copyEndpoint").textContent="Đã copy!"; setTimeout(function(){ $("copyEndpoint").textContent="Copy endpoint" },1500) }) };
+$("saveKeys").onclick = function(){ adminKey=$("adminKey").value.trim(); apiKey=$("apiKey").value.trim(); serverBase=$("serverUrl").value.trim().replace(/\/+$/,""); localStorage.setItem("muse_router_admin_key",adminKey); localStorage.setItem("muse_router_api_key",apiKey); localStorage.setItem("muse_router_server_url",serverBase); refreshEndpoint(); $("connStatus").textContent="Đã lưu key và Server URL vào localStorage của trình duyệt." };
+$("testConn").onclick = async function(){
+  try{
+    var h = await fetch(apiUrl("/healthz")); var a = null;
+    if(adminKey){ var r = await adminFetch("/admin/accounts"); a = r.status; }
+    $("connStatus").innerHTML = "/healthz: "+h.status + (a ? " &middot; /admin/accounts: "+a : " (chưa nhập admin key nên chưa kiểm tra admin)");
+  }catch(e){ $("connStatus").textContent = "Lỗi kết nối: "+e }
+};
+function renderAccounts(accounts){
+  if(!accounts.length) return "<p>Chưa có tài khoản nào.</p>";
+  var rows = accounts.map(function(a){
+    var sess = (a.cookies && a.cookies.hatch_sess) || a.hatch_sess_masked || "";
+    var err = a.last_error ? esc(String(a.last_error).slice(0,80)) : "";
+    return "<tr><td>"+esc(a.id)+"</td><td>"+esc(a.label)+"</td><td><span class='badge "+esc(a.status)+"'>"+esc(a.status)+"</span></td><td class='mono'>"+esc(sess)+"</td><td>"+a.max_concurrent+"</td><td>"+a.active_leases+"</td><td>"+a.success_requests+"/"+a.failed_requests+"</td><td>"+err+"</td><td><button class='sec' onclick='resetAcc(\""+esc(a.id)+"\")'>Reset</button> <button class='danger' onclick='delAcc(\""+esc(a.id)+"\")'>Xóa</button></td></tr>";
+  }).join("");
+  return "<table><tr><th>ID</th><th>Label</th><th>Status</th><th>hatch_sess (đã che)</th><th>Max</th><th>Active</th><th>OK/Fail</th><th>Lỗi gần nhất</th><th></th></tr>"+rows+"</table>";
+}
+async function loadOverview(){
+  if(needAdmin("overviewHint")){ $("cards").innerHTML=""; $("overviewAccounts").innerHTML=""; return }
+  try{
+    var u = await (await adminFetch("/admin/usage")).json();
+    var p = u.pool || {};
+    var rate = u.total_requests ? Math.round(100*u.success/u.total_requests)+"%" : "—";
+    $("cards").innerHTML = [
+      ["Tổng request", u.total_requests],["Tài khoản ready", p.ready==null?"—":p.ready],
+      ["Cooling / Expired", (p.cooling_down||0)+" / "+(p.expired||0)],["Active leases", p.active_leases_total==null?"—":p.active_leases_total],
+      ["Tỉ lệ thành công", rate],["Tổng token IN/OUT", u.total_prompt_tokens+" / "+u.total_completion_tokens]
+    ].map(function(c){ return "<div class='card'><b>"+c[1]+"</b><span>"+c[0]+"</span></div>" }).join("");
+    var acc = await (await adminFetch("/admin/accounts")).json();
+    $("overviewAccounts").innerHTML = renderAccounts((acc.accounts||[]).slice(0,10));
+  }catch(e){ $("overviewAccounts").textContent = "Không tải được dữ liệu: "+e }
+}
+async function loadAccounts(){
+  if(needAdmin("accountsHint")){ $("accountsTable").innerHTML=""; return }
+  try{ var d = await (await adminFetch("/admin/accounts")).json(); $("accountsTable").innerHTML = renderAccounts(d.accounts||[]); }
+  catch(e){ $("accountsTable").textContent = "Không tải được: "+e }
+}
+window.resetAcc = async function(id){ if(!adminKey) return; await adminFetch("/admin/accounts/"+encodeURIComponent(id)+"/reset",{method:"POST"}); loadAccounts(); loadOverview(); };
+window.delAcc = async function(id){ if(!adminKey) return; if(!confirm("Xóa tài khoản "+id+"?")) return; await adminFetch("/admin/accounts/"+encodeURIComponent(id),{method:"DELETE"}); loadAccounts(); loadOverview(); };
+$("addAccount").onclick = async function(){
+  if(needAdmin("accountsHint")) return;
+  var body = {label: $("newLabel").value.trim() || "account"};
+  var header = $("newCookieHeader").value.trim();
+  if(header){ body.cookie_header = header; }
+  else {
+    try{ body.cookies = JSON.parse($("newCookiesJson").value.trim() || "{}"); }
+    catch(e){ $("addStatus").textContent = "Cookies JSON không hợp lệ: "+e; return }
+  }
+  if($("newMax").value) body.max_concurrent = parseInt($("newMax").value,10);
+  if($("newProxy").value.trim()) body.proxy = $("newProxy").value.trim();
+  var r = await adminFetch("/admin/accounts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  $("addStatus").textContent = r.ok ? "Đã thêm tài khoản." : "Lỗi "+r.status+": "+(await r.text()).slice(0,300);
+  if(r.ok) loadAccounts();
+};
+async function loadModels(){
+  if(!apiKey){ hint("chatHint","Chưa nhập API key. Vào mục Endpoint &amp; Key, nhập API key rồi quay lại."); $("modelSel").innerHTML=""; return }
+  hint("chatHint","");
+  try{ var d = await (await apiFetch("/v1/models")).json(); $("modelSel").innerHTML = (d.data||[]).map(function(m){ return "<option>"+esc(m.id)+"</option>" }).join(""); }
+  catch(e){ $("modelSel").innerHTML=""; }
+}
+$("sendChat").onclick = async function(){
+  if(!apiKey){ $("chatOut").textContent = "Chưa nhập API key."; return }
+  var body = {model: $("modelSel").value || "muse-spark", messages:[{role:"user", content: $("prompt").value}], stream: $("streamChk").checked};
+  $("chatOut").textContent = "Đang gửi..."; $("chatUsage").textContent = "";
+  try{
+    if(!body.stream){
+      var r = await apiFetch("/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      var j = await r.json();
+      var msg = j.choices && j.choices[0] && j.choices[0].message;
+      $("chatOut").textContent = msg ? (msg.tool_calls ? JSON.stringify(msg.tool_calls,null,2) : (msg.content||"")) : JSON.stringify(j,null,2);
+      if(j.usage) $("chatUsage").textContent = "IN "+j.usage.prompt_tokens+" / OUT "+j.usage.completion_tokens+" / TOTAL "+j.usage.total_tokens+" — finish: "+(j.choices[0].finish_reason||"");
+    } else {
+      var resp = await apiFetch("/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      var reader = resp.body.getReader(); var dec = new TextDecoder(); var buf=""; var out=""; var usage="";
+      while(true){
+        var chunk = await reader.read(); if(chunk.done) break;
+        buf += dec.decode(chunk.value,{stream:true});
+        var parts = buf.split("\n\n"); buf = parts.pop();
+        parts.forEach(function(part){
+          part.split("\n").forEach(function(line){
+            if(line.indexOf("data: ")!==0) return;
+            var data = line.slice(6).trim(); if(data==="[DONE]") return;
+            try{
+              var p = JSON.parse(data);
+              if(p.usage) usage = "IN "+p.usage.prompt_tokens+" / OUT "+p.usage.completion_tokens;
+              var ch = p.choices && p.choices[0];
+              if(ch && ch.delta){
+                if(ch.delta.content) out += ch.delta.content;
+                if(ch.delta.tool_calls) out += JSON.stringify(ch.delta.tool_calls);
+              }
+            }catch(e){}
+          });
+        });
+        $("chatOut").textContent = out;
+      }
+      $("chatUsage").textContent = usage;
+    }
+  }catch(e){ $("chatOut").textContent = "Lỗi: "+e }
+};
+async function loadLogs(){
+  if(needAdmin("logsHint")){ $("logsTable").innerHTML=""; return }
+  try{
+    var d = await (await adminFetch("/admin/activity?limit=200")).json();
+    var ev = d.events||[];
+    if(!ev.length){ $("logsTable").innerHTML="<p>Chưa có log nào. Gửi một request chat để tạo log.</p>"; return }
+    var rows = ev.map(function(e){
+      var cls = e.status==="success" ? "ok" : "err";
+      return "<tr><td class='mono'>"+esc(e.ts)+"</td><td>"+esc(e.model||"—")+"</td><td class='mono'>"+esc(e.account_id||"—")+"</td><td class='"+cls+"'>"+esc(e.status)+"</td><td>"+e.duration_ms+"ms</td><td>"+(e.ttft_ms==null?"—":e.ttft_ms+"ms")+"</td><td>"+e.prompt_tokens+" / "+e.completion_tokens+"</td><td>"+esc(e.error||"")+"</td></tr>";
+    }).join("");
+    $("logsTable").innerHTML = "<table><tr><th>Thời gian</th><th>Model</th><th>Account</th><th>Status</th><th>Duration</th><th>TTFT</th><th>IN/OUT</th><th>Lỗi</th></tr>"+rows+"</table>";
+  }catch(e){ $("logsTable").textContent = "Không tải được log: "+e }
+}
+function startLogs(){ loadLogs(); if(logTimer) clearInterval(logTimer); logTimer = setInterval(function(){ if(!paused) loadLogs() }, 3000); $("logState").textContent = paused ? "Đã tạm dừng" : "Tự refresh mỗi 3s"; }
+$("pauseLogs").onclick = function(){ paused = !paused; $("pauseLogs").textContent = paused ? "Tiếp tục tự refresh" : "Tạm dừng tự refresh"; $("logState").textContent = paused ? "Đã tạm dừng" : "Tự refresh mỗi 3s"; };
+$("clearLogs").onclick = async function(){ if(!adminKey) return; await adminFetch("/admin/activity/clear",{method:"POST"}); loadLogs(); };
+async function loadSettings(){
+  if(needAdmin("settingsHint")){ $("configTable").innerHTML=""; return }
+  try{
+    var d = await (await adminFetch("/admin/config")).json();
+    var rows = Object.keys(d).map(function(k){ return "<tr><td class='mono'>"+esc(k)+"</td><td class='mono'>"+esc(d[k])+"</td></tr>" }).join("");
+    $("configTable").innerHTML = "<table><tr><th>Key</th><th>Giá trị</th></tr>"+rows+"</table>";
+  }catch(e){ $("configTable").textContent = "Không tải được config: "+e }
+}
+loadOverview();
+</script>
+</body>
+</html>

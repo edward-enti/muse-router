@@ -1,0 +1,13 @@
+services:
+  muse-router:
+    build: .
+    ports:
+      - "18610:18610"
+    environment:
+      - MUSE_HOST=0.0.0.0
+      - MUSE_PORT=18610
+      - MUSE_DRIVER=browser
+      - MUSE_HEADLESS=true
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
